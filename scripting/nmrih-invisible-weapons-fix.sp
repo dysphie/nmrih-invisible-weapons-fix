@@ -1,74 +1,114 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#include <sdktools>
 #include <sdkhooks>
+#include <sdktools>
+#include <sourcemod>
 
 #define EF_BONEMERGE_FASTCULL 128
+#define MAX_WEAPON_CLASSNAME  21
+#define WEAPON_NOT_CARRIED    0
 
-bool isWeapon[2049];
-bool lateloaded;
+bool g_IsWeapon[2049];
+bool g_LateLoaded;
 
-public Plugin myinfo = 
+public Plugin myinfo =
 {
 	name        = "[NMRiH] Invisible Weapons Fix",
 	author      = "Dysphie",
 	description = "Fixes dropped weapons becoming invisible",
-	version     = "1.0.0",
+	version     = "1.1.0",
 	url         = ""
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	lateloaded = late;
+	g_LateLoaded = late;
 	return APLRes_Success;
 }
 
 public void OnMapStart()
 {
-	if (lateloaded)
-	{
-		int maxEnts = GetMaxEntities();
-		for (int i = MaxClients+1; i < maxEnts; i++)
-			if (IsValidWeapon(i))
-				isWeapon[i] = true;
+	CreateTimer(2.5, FixInvisibleWeapons, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+
+	if (!g_LateLoaded) {
+		return;
 	}
 
-	CreateTimer(1.5, FixInvisibleWeapons, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+	int  maxEnts = GetMaxEntities();
+	char classname[MAX_WEAPON_CLASSNAME];
+	for (int entity = MaxClients + 1; entity < maxEnts; entity++)
+	{
+		if (!IsValidEdict(entity)) {
+			continue;
+		}
+
+		GetEntityClassname(entity, classname, sizeof(classname));
+		g_IsWeapon[entity] = IsValidWeapon(classname);
+	}
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	if (IsValidWeapon(entity))
-		isWeapon[entity] = true;
+	if (IsValidWeapon(classname)) {
+		g_IsWeapon[entity] = true;
+	}
 }
 
 public void OnEntityDestroyed(int entity)
 {
-	if (IsValidWeapon(entity))
-		isWeapon[entity] = false;
+	if (entity < 0) {
+		return;
+	}
+
+	g_IsWeapon[entity] = false;
 }
 
-public Action FixInvisibleWeapons(Handle timer)
+Action FixInvisibleWeapons(Handle timer)
 {
 	int effects;
-	for (int e; e < sizeof(isWeapon); e++)
+
+	for (int entity; entity < sizeof(g_IsWeapon); entity++)
 	{
-		// m_iState 0 means the weapon isn't equipped
-		if (isWeapon[e] && !GetEntProp(e, Prop_Data, "m_iState"))
+		if (g_IsWeapon[entity] && GetEntProp(entity, Prop_Data, "m_iState") == WEAPON_NOT_CARRIED)
 		{
-			// I don't know why, but flipping this flag 
-			// causes the client to correct the rendering...
-			effects = GetEntProp(e, Prop_Send, "m_fEffects");
+			// Flipping this flag forces a client-side re-render which corrects the perceived weapon origin
+			effects = GetEntProp(entity, Prop_Send, "m_fEffects");
 			if (effects & EF_BONEMERGE_FASTCULL)
-				SetEntProp(e, Prop_Send, "m_fEffects", effects & ~EF_BONEMERGE_FASTCULL);
+			{
+				SetEntProp(entity, Prop_Send, "m_fEffects", effects & ~EF_BONEMERGE_FASTCULL);
+			}
 			else
-				SetEntProp(e, Prop_Send, "m_fEffects", effects | EF_BONEMERGE_FASTCULL);
+			{
+				SetEntProp(entity, Prop_Send, "m_fEffects", effects | EF_BONEMERGE_FASTCULL);
+			}
 		}
 	}
+
+	return Plugin_Continue;
 }
 
-bool IsValidWeapon(int entity)
+// This looks gross but it's actually faster than HasEntProp and StringMap!
+bool IsValidWeapon(const char[] classname)
 {
-	return IsValidEdict(entity) && HasEntProp(entity, Prop_Data, "m_bIsInIronsights");
+	// All entities with these prefixes are weapons
+	static const char PREFIX_FIREARM[] = "fa_";
+	static const char PREFIX_MELEE[]   = "me_";
+	static const char PREFIX_BOW[]     = "bow_";
+	static const char PREFIX_NADE[]    = "exp_";
+	static const char PREFIX_TOOL[]    = "tool_";
+
+	if (!strncmp(classname, PREFIX_FIREARM, sizeof(PREFIX_FIREARM) - 1) || 
+		!strncmp(classname, PREFIX_MELEE, sizeof(PREFIX_MELEE) - 1) || 
+		!strncmp(classname, PREFIX_BOW, sizeof(PREFIX_BOW) - 1) || 
+		!strncmp(classname, PREFIX_NADE, sizeof(PREFIX_NADE) - 1) || 
+		!strncmp(classname, PREFIX_TOOL, sizeof(PREFIX_TOOL) - 1))
+	{
+		return true;
+	}
+
+	// But not all "item_" entities are weapons
+	return StrEqual(classname, "item_maglite") || StrEqual(classname, "item_walkietalkie") || 
+		StrEqual(classname, "item_pills") || StrEqual(classname, "item_first_aid") || 
+		StrEqual(classname, "item_gene_therapy") || StrEqual(classname, "item_bandages");
 }
