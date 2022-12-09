@@ -39,7 +39,7 @@ public void OnMapStart()
 	char classname[MAX_WEAPON_CLASSNAME];
 	for (int entity = MaxClients + 1; entity < maxEnts; entity++)
 	{
-		if (entity > 0) 
+		if (IsValidEdict(entity)) 
 		{
 			GetEntityClassname(entity, classname, sizeof(classname));
 			g_IsWeapon[entity] = IsValidWeapon(classname);
