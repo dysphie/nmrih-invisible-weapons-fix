@@ -39,29 +39,26 @@ public void OnMapStart()
 	char classname[MAX_WEAPON_CLASSNAME];
 	for (int entity = MaxClients + 1; entity < maxEnts; entity++)
 	{
-		if (!IsValidEdict(entity)) {
-			continue;
+		if (entity > 0) 
+		{
+			GetEntityClassname(entity, classname, sizeof(classname));
+			g_IsWeapon[entity] = IsValidWeapon(classname);
 		}
-
-		GetEntityClassname(entity, classname, sizeof(classname));
-		g_IsWeapon[entity] = IsValidWeapon(classname);
 	}
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	if (IsValidWeapon(classname)) {
+	if (entity > 0 && IsValidWeapon(classname)) {
 		g_IsWeapon[entity] = true;
 	}
 }
 
 public void OnEntityDestroyed(int entity)
 {
-	if (entity < 0) {
-		return;
+	if (entity > 0) {
+		g_IsWeapon[entity] = false;
 	}
-
-	g_IsWeapon[entity] = false;
 }
 
 Action FixInvisibleWeapons(Handle timer)
