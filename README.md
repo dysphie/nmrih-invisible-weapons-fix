@@ -1,3 +1,6 @@
+> [!WARNING]
+> This plugin is unmaintained since Torn Banner's acquisition of the game.
+
 # [NMRiH] Invisible Weapons Fix
 
 Fixes dropped weapons becoming invisible.
